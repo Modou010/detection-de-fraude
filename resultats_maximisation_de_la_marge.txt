@@ -1,0 +1,45 @@
+================================================================================
+RÉSUMÉ  MAXIMISATION DE LA MARGE
+================================================================================
+
+RÈGLES MÉTIER:
+  - TN (Accepter bon client):    +5% du montant
+  - FP (Refuser bon client):     +70% × 5% du montant
+  - FN (Accepter fraude):        perte selon montant (0-80%)
+  - TP (Refuser fraude):         0€
+
+DATASET:
+  Train: 3,888,468 transactions
+  Test:  737,068 transactions
+  Features: 15
+
+RÉSULTATS PAR MODÈLE (triés par marge):
+--------------------------------------------------------------------------------
+                     modele  marge_totale       f1   FN     FP
+       XGBoost (seuil=0.85)  2.055747e+06 0.103911 4819  23915
+     UnderSampling + LogReg  2.040856e+06 0.066925 4179  60122
+            XGBoost + SMOTE  2.018959e+06 0.136186 5648   4970
+             SMOTE + LogReg  1.975483e+06 0.093882 6050   2347
+      LogReg + class_weight  1.965497e+06 0.038624 2719 184755
+RandomForest + class_weight  1.932808e+06 0.037092 2331 213344
+       BalancedRandomForest  1.923921e+06 0.036171 2158 228441
+ XGBoost + scale_pos_weight  1.896777e+06 0.034708 2005 247189
+
+================================================================================
+🏆 MEILLEUR MODÈLE: XGBoost (seuil=0.85)
+================================================================================
+  Marge totale:  2,055,747.24 €
+  F1-score:      0.1039
+  Précision:     0.0651
+  Rappel:        0.2569
+
+DÉTAILS FINANCIERS:
+  TN (bons acceptés):       706,668 → +2,078,151.43 €
+  FP (bons refusés):        23,915 → +126,043.00 €
+  FN (fraudes acceptées):   4,819 → -148,447.20 €
+  TP (fraudes refusées):    1,666 → 0 €
+
+INTERPRÉTATION:
+  • Gains totaux:  2,204,194.44 €
+  • Pertes totales: 148,447.20 €
+  • Marge nette:    2,055,747.24 €
