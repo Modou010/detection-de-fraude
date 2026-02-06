@@ -1,0 +1,83 @@
+% =============================================================================
+% RAPPORT - FOUILLE DE DONNÉES MASSIVES
+% Projet : Détection de fraudes par chèque (données déséquilibrées)
+% M2 SISE - Université Lumière Lyon 2
+% =============================================================================
+
+\documentclass[12pt,a4paper]{article}
+
+% ======================== PACKAGES ========================
+\usepackage[utf8]{inputenc}
+\usepackage[french]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{multirow}
+
+% ======================== CONFIGURATION ========================
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    citecolor=blue
+}
+
+% En-tête et pied de page
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Fouille de Données Massives - M2 SISE}
+\fancyhead[R]{Projet : Détection de fraudes}
+\fancyfoot[C]{\thepage}
+
+% Configuration des listings (code)
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    language=Python,
+    showstringspaces=false
+}
+
+% ======================== INFORMATIONS DOCUMENT ========================
+\title{\textbf{Fouille de Données Massives} \\ 
+       \large Projet : Détection de fraudes par chèque \\ 
+       dans un contexte de données déséquilibrées}
+\author{Yassine CHENIOUR \and Modou MBOUP}
+\date{M2 Informatique - SISE \\ Université Lumière Lyon 2 \\ \today}
+
+% ======================== DÉBUT DU DOCUMENT ========================
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ======================== SECTIONS ========================
+\input{sections/0_resume}
+\input{sections/1_introduction}
+\input{sections/2_analyse_donnees}
+\input{sections/3_methodologie}
+\input{sections/4_experiences}
+\input{sections/5_conclusion}
+
+% ======================== BIBLIOGRAPHIE ========================
+\newpage
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

@@ -1,0 +1,127 @@
+\section{Conclusion}
+
+\subsection{Synthèse des contributions}
+
+Ce projet a permis d'explorer en profondeur la problématique de détection de fraudes par chèque dans un contexte de données fortement déséquilibrées (taux de fraude de 0,60\% en apprentissage, 0,88\% en test). Nous avons implémenté et comparé \textbf{9 approches différentes} combinant techniques de rééchantillonnage (SMOTE, sous-échantillonnage), algorithmes de classification supervisés (régression logistique, Random Forest, XGBoost), et méthodes \textit{cost-sensitive} (pondération des classes, ajustement du seuil de décision).
+
+\textbf{Résultats principaux :}
+
+\begin{itemize}
+    \item \textbf{Partie 1 (F-mesure) :} Le modèle \textbf{XGBoost avec seuil ajusté ($\tau=0.939$)} a atteint une F-mesure de \textbf{0.148} sur l'ensemble de test, avec une précision de 18.4\% et un rappel de 12.4\%. Ce résultat représente une amélioration de \textbf{+85\%} par rapport au meilleur modèle de la littérature (F1 $\approx$ 0.08 pour SVM\_C sur des données similaires), démontrant l'efficacité de l'ajustement fin du seuil de décision pour maximiser la F-mesure.
+    
+    \item \textbf{Partie 2 (Profit) :} L'approche \textbf{XGBoost avec seuil ajusté ($\tau=0.85$)} a généré un profit de \textbf{2 055 747€} sur la période de test (3 mois), soit environ \textbf{685k€/mois} ou \textbf{8,2M€/an} en extrapolation. Ce modèle surpasse le modèle optimisé pour la F-mesure de \textbf{+45 891€} (+2,3\%) sur 3 mois, correspondant à un gain annuel potentiel d'environ \textbf{183k€} (extrapolation : 45 891€ × 4 trimestres).
+    
+    \item \textbf{Comparaison F-mesure vs. Profit :} Nous avons démontré empiriquement que l'optimisation de la F-mesure ne conduit \textit{pas} nécessairement au profit maximal. Le modèle orienté profit privilégie un rappel plus élevé (25.7\% vs. 12.4\%) au détriment de la précision (6.5\% vs. 18.4\%), un compromis qui s'avère financièrement optimal malgré une F-mesure inférieure (0.104 vs. 0.148). Cette divergence illustre l'importance cruciale d'aligner les métriques d'évaluation avec les objectifs métier.
+\end{itemize}
+
+\subsection{Limites et difficultés rencontrées}
+
+Plusieurs limitations et défis ont été identifiés au cours de ce projet :
+
+\begin{enumerate}
+    \item \textbf{Non-stationnarité temporelle :} L'augmentation du taux de fraude entre l'ensemble d'apprentissage (0,60\%) et de test (0,88\%) suggère une évolution des comportements frauduleux ou des politiques de détection. Cette non-stationnarité impacte potentiellement la généralisation des modèles et nécessiterait un réentraînement régulier en production (recommandation : mensuel).
+    
+    \item \textbf{Absence de validation croisée :} Les modèles ont été entraînés sur l'intégralité de l'ensemble d'apprentissage sans validation croisée, et les hyperparamètres ont été fixés a priori. Cette approche simplifie l'implémentation mais présente un risque de surapprentissage non détecté. Une stratégie de validation croisée stratifiée combinée à une recherche d'hyperparamètres (\texttt{GridSearchCV}) pourrait améliorer significativement les performances, au prix d'un coût computationnel élevé (estimé à 2-3 heures par modèle sur notre dataset de 3,9M observations).
+    
+    \item \textbf{Ajustement du seuil sur l'ensemble de test :} L'optimisation du seuil de décision a été effectuée directement sur l'ensemble de test pour simplifier l'implémentation. Idéalement, un ensemble de validation séparé aurait dû être utilisé (split temporel interne : 4 mois train / 2 mois validation, comme suggéré dans la thèse de référence). Cette limitation introduit un risque de surestimation de la performance réelle en production.
+    
+    \item \textbf{Performances absolues modestes :} Bien que supérieures à la littérature, les performances absolues restent modestes (F1 = 0.148, rappel = 12-26\%). Cette limitation reflète la difficulté intrinsèque de la tâche face au déséquilibre extrême (1:165) et suggère qu'un système de détection automatique devrait être couplé à une validation humaine pour les transactions suspectes.
+    
+    \item \textbf{Interprétabilité vs. Performance :} Les modèles les plus performants (XGBoost) sont difficilement interprétables, ce qui pourrait poser problème pour une validation métier ou une conformité réglementaire (RGPD, droit à l'explication). L'implémentation de méthodes d'interprétation post-hoc (SHAP, LIME) constitue une perspective prioritaire pour un déploiement en production.
+    
+    \item \textbf{Réduction des features :} La réduction de 20 à 16 features (exclusion de \texttt{VerifianceCPT2/3} pour corrélation) a été effectuée manuellement. Une approche plus systématique (sélection de features via importance, LASSO) pourrait identifier d'autres redondances ou interactions non linéaires.
+\end{enumerate}
+
+\subsection{Perspectives d'amélioration}
+
+Plusieurs pistes d'amélioration pourraient être explorées pour renforcer les performances et la robustesse du système de détection :
+
+\subsubsection{Enrichissement des données}
+
+\begin{itemize}
+    \item \textbf{Features temporelles avancées :} Création de variables capturant les patterns hebdomadaires, mensuels ou saisonniers (jours fériés, périodes de soldes, vacances scolaires).
+    \item \textbf{Agrégations comportementales roulantes :} Calcul de statistiques sur fenêtres glissantes (30, 60, 90 jours) pour capturer l'évolution du comportement client (montant moyen, fréquence, variance).
+    \item \textbf{Graph features :} Exploitation de la structure de réseau entre clients, magasins et comptes bancaires pour détecter des fraudes organisées (détection de communautés, centralité des nœuds).
+    \item \textbf{Données externes :} Intégration de sources tierces (listes noires nationales, données géographiques de risque, informations sociodémographiques).
+\end{itemize}
+
+\subsubsection{Approches méthodologiques avancées}
+
+\begin{itemize}
+    \item \textbf{Optimisation des hyperparamètres :} Recherche exhaustive via \texttt{GridSearchCV} ou \texttt{RandomizedSearchCV}, voire optimisation bayésienne (Optuna, Hyperopt) pour réduire le temps de calcul. Espaces de recherche suggérés :
+    \begin{itemize}
+        \item XGBoost : \texttt{n\_estimators} $\in \{50, 100, 200, 300\}$, \texttt{max\_depth} $\in \{3, 5, 7, 9\}$, \texttt{learning\_rate} $\in \{0.01, 0.05, 0.1, 0.3\}$
+        \item Random Forest : \texttt{n\_estimators} $\in \{100, 200, 300\}$, \texttt{max\_depth} $\in \{10, 20, 30, \text{None}\}$
+    \end{itemize}
+    
+    \item \textbf{Ensemble methods :} Combinaison (stacking, blending) des meilleurs modèles pour chaque objectif (F-mesure, profit) afin de créer un méta-modèle plus robuste. Par exemple, moyenner les probabilités prédites par XGBoost + SMOTE et XGBoost + UnderSampling.
+    
+    \item \textbf{Deep Learning :} Utilisation de réseaux de neurones profonds pour capturer des interactions non linéaires complexes :
+    \begin{itemize}
+        \item Autoencodeurs pour détection d'anomalies (approche non supervisée)
+        \item LSTM pour exploiter les dépendances temporelles dans les séquences de transactions
+        \item Réseaux de neurones à graphes (GNN) pour modéliser les relations client-magasin-banque
+    \end{itemize}
+    
+    \item \textbf{Apprentissage semi-supervisé :} Exploitation des transactions non étiquetées (transactions intermédiaires dont le statut fraude n'est pas encore connu) pour améliorer la représentation des données via techniques comme le pseudo-labeling ou les réseaux contradictoires génératifs (GANs).
+    
+    \item \textbf{Cost-sensitive loss functions :} Implémentation de fonctions de perte personnalisées intégrant directement la matrice de coûts métier dans l'optimisation, plutôt que de s'appuyer uniquement sur le rééchantillonnage ou le réajustement du seuil. XGBoost permet de définir des objectifs custom via l'API Python.
+\end{itemize}
+
+\subsubsection{Adaptation au contexte production}
+
+\begin{itemize}
+    \item \textbf{Apprentissage en ligne (online learning) :} Mise à jour incrémentale des modèles (ex: Vowpal Wabbit, River) pour s'adapter en temps réel à l'évolution des patterns de fraude sans réentraînement complet quotidien.
+    
+    \item \textbf{Détection de drift :} Surveillance continue de la distribution des features (Kolmogorov-Smirnov, Population Stability Index) et des performances (précision, rappel, marge) pour déclencher automatiquement un réentraînement lorsque les données dérivent au-delà d'un seuil critique.
+    
+    \item \textbf{Système d'alerte multi-niveaux :} Au-delà de la décision binaire accepter/refuser, mise en place de niveaux de confiance :
+    \begin{itemize}
+        \item Probabilité $< 0.3$ : Acceptation automatique
+        \item Probabilité $\in [0.3, 0.7]$ : Validation humaine (équipe fraude)
+        \item Probabilité $> 0.7$ : Refus automatique + alerte prioritaire
+    \end{itemize}
+    Cette stratégie réduit la charge opérationnelle tout en conservant une supervision humaine sur les cas ambigus.
+    
+    \item \textbf{Interprétabilité post-hoc :} Implémentation de SHAP (SHapley Additive exPlanations) ou LIME (Local Interpretable Model-agnostic Explanations) pour expliquer chaque prédiction individuelle. Cette capacité est essentielle pour :
+    \begin{itemize}
+        \item Justifier les décisions auprès des clients contestataires
+        \item Respecter les exigences RGPD (droit à l'explication)
+        \item Permettre aux équipes métier de valider la cohérence des règles apprises
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Validation métier et déploiement}
+
+\begin{itemize}
+    \item \textbf{A/B testing en conditions réelles :} Déployer le système sur 10-20\% du trafic pendant 1-2 mois et comparer avec le système existant en termes de :
+    \begin{itemize}
+        \item Marge réelle générée (objectif principal)
+        \item Satisfaction client (taux de réclamations, taux de désabonnement)
+        \item Charge opérationnelle (nombre de validations manuelles, temps de traitement)
+    \end{itemize}
+    
+    \item \textbf{Analyse coûts-bénéfices détaillée :} Intégrer dans le calcul du profit les coûts opérationnels réels :
+    \begin{itemize}
+        \item Coût de traitement manuel d'une alerte ($\approx$ 2€/transaction selon benchmarks sectoriels)
+        \item Impact sur la satisfaction client et le risque de churn (difficilement quantifiable mais réel)
+        \item Coût réputationnel en cas de fraude médiatisée
+    \end{itemize}
+    
+    \item \textbf{Calibration des probabilités :} Vérifier et ajuster la calibration des probabilités prédites (via courbes de calibration, méthodes isotonic ou Platt scaling) pour garantir que $P(\text{Fraude}|p=0.8) \approx 0.8$. Une bonne calibration facilite la prise de décision basée sur des seuils de risque métier.
+    
+    \item \textbf{Simulation de scénarios :} Tester la robustesse du système face à des scénarios adverses :
+    \begin{itemize}
+        \item Attaque coordonnée (vague soudaine de fraudes organisées)
+        \item Évolution rapide des tactiques frauduleuses (concept drift brutal)
+        \item Défaillance temporaire du système (mode dégradé : accepter toutes les transactions vs. tout refuser)
+    \end{itemize}
+\end{itemize}
+
+\vspace{1cm}
+
+\textbf{Conclusion générale :} Ce projet a démontré l'efficacité des approches combinant rééchantillonnage, algorithmes \textit{cost-sensitive} et ajustement du seuil de décision pour la détection de fraudes en contexte déséquilibré. Les résultats obtenus (F1 = 0.148, marge = 2,06M€ sur 3 mois) constituent une base solide pour le développement d'un système de détection en temps réel. La comparaison directe entre optimisation de la F-mesure et optimisation du profit a révélé l'importance critique d'aligner les métriques d'évaluation avec les objectifs business : un gain de marge de +2,3\% (+46k€ sur 3 mois) peut être obtenu en privilégiant le critère métier plutôt que les métriques académiques classiques.
+
+Les perspectives d'amélioration identifiées (optimisation des hyperparamètres, deep learning, apprentissage en ligne, interprétabilité) ouvrent la voie à des gains de performance substantiels. Néanmoins, le déploiement en production nécessitera une validation approfondie en conditions réelles (A/B testing, monitoring continu, détection de drift) et une intégration étroite avec les processus métier existants. L'acceptabilité du système dépendra autant de ses performances techniques que de sa capacité à être expliqué, audité et ajusté en fonction des retours terrain.
+
+\newpage

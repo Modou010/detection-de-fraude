@@ -1,0 +1,227 @@
+\section{Analyse des données}
+
+Cette section présente une exploration approfondie du jeu de données utilisé pour le développement des modèles de détection de fraudes. L'analyse porte sur les caractéristiques générales du dataset, la distribution des variables, le déséquilibre des classes et les choix de prétraitement effectués.
+
+\subsection{Présentation du jeu de données}
+
+Le jeu de données exploité provient d'une enseigne de la grande distribution française et couvre une période de 10 mois, du 1er février 2017 au 30 novembre 2017. Chaque observation représente une transaction par chèque effectuée dans un magasin de l'enseigne. Les données ont été collectées en collaboration avec la FNCI (Fédération Nationale des Caisses d'Épargne) et la Banque de France, garantissant leur qualité et leur pertinence pour la détection de fraudes bancaires.
+
+\subsubsection{Caractéristiques générales}
+
+Le dataset comprend \textbf{4 645 652 transactions} décrites par \textbf{23 variables}, dont :
+\begin{itemize}
+    \item 2 identifiants : \texttt{ZIBZIN} (identifiant bancaire du chéquier) et \texttt{IDAvisAutorisationCheque} (identifiant unique de la transaction)
+    \item 1 variable cible : \texttt{FlagImpaye} (0 = transaction acceptée, 1 = fraude)
+    \item 20 variables explicatives issues de \textit{feature engineering} (détaillées dans le Tableau \ref{tab:variables})
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Description des variables du jeu de données}
+\label{tab:variables}
+\small
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Variable} & \textbf{Description} \\
+\midrule
+\texttt{Montant} & Montant de la transaction en euros \\
+\texttt{DateTransaction} & Date et heure de la transaction \\
+\texttt{CodeDecision} & Code décision système (0=accepté, 1=liste blanche, 2=liste noire, 3=arrêté par le passé) \\
+\texttt{VerifianceCPT1/2/3} & Nombre de transactions du même identifiant bancaire sur 1/3/7 derniers jours \\
+\texttt{D2CB} & Durée de connaissance du client en jours (max 2 ans) \\
+\texttt{ScoringFP1/2/3} & Scores d'anormalité du panier pour 3 familles de produits \\
+\texttt{TauxImpNb\_RB} & Taux d'impayés enregistrés selon la région \\
+\texttt{TauxImpNB\_CPM} & Taux d'impayés relatif au magasin \\
+\texttt{EcartNumCheq} & Différence entre numéros de chèques consécutifs \\
+\texttt{NbrMagasin3J} & Nombre de magasins différents fréquentés sur 3 derniers jours \\
+\texttt{DiffDateTr1/2/3} & Écart en jours avec les 1/2/3 transactions précédentes \\
+\texttt{CA3TRetMtt} & Montant des 3 dernières transactions + montant actuel \\
+\texttt{CA3TR} & Montant cumulé des 3 dernières transactions \\
+\texttt{Heure} & Heure de la transaction (format décimal) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Remarque importante :} La variable \texttt{CodeDecision} fournit une information post-transaction (décision historique du système) et ne peut donc pas être utilisée pour la prédiction. Elle est conservée uniquement pour l'analyse exploratoire et sera exclue lors de l'entraînement des modèles.
+
+\subsection{Qualité des données et prétraitement}
+
+\subsubsection{Valeurs manquantes}
+
+Une inspection exhaustive du dataset révèle l'\textbf{absence totale de valeurs manquantes} dans l'ensemble des 23 variables. Cette caractéristique simplifie considérablement la phase de prétraitement et garantit l'exploitabilité directe des données sans imputation.
+
+\subsubsection{Conversion des formats numériques}
+
+Les données brutes utilisent la notation européenne pour les nombres décimaux (virgule comme séparateur). De plus, certaines valeurs sont représentées en notation scientifique. Un prétraitement spécifique a été appliqué pour convertir toutes les variables numériques au format standard (point comme séparateur) :
+
+\begin{lstlisting}
+# Conversion des colonnes numeriques avec notation europeenne
+numeric_cols = ['Montant', 'VerifianceCPT2', 'VerifianceCPT3', 
+                'TauxImpNb_RB', 'TauxImpNB_CPM', ...]
+for col in numeric_cols:
+    df[col] = df[col].astype(str).str.replace(',', '.')
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+\end{lstlisting}
+
+Cette étape garantit la cohérence des calculs numériques et évite les erreurs de parsing lors de l'entraînement des modèles.
+
+\subsubsection{Conversion temporelle}
+
+La variable \texttt{DateTransaction} a été convertie au format \texttt{datetime} de Pandas pour permettre le split temporel et l'analyse de séries chronologiques :
+
+\begin{lstlisting}
+df['DateTransaction'] = pd.to_datetime(df['DateTransaction'])
+\end{lstlisting}
+
+\subsection{Déséquilibre des classes}
+
+\subsubsection{Distribution globale}
+
+L'analyse de la variable cible \texttt{FlagImpaye} révèle un déséquilibre extrême, caractéristique des problèmes de détection de fraudes. Sur l'ensemble du dataset :
+
+\begin{itemize}
+    \item \textbf{Transactions légitimes (classe 0) :} 4 614 821 observations (99,34\%)
+    \item \textbf{Transactions frauduleuses (classe 1) :} 29 831 observations (0,64\%)
+\end{itemize}
+
+Le \textbf{taux de déséquilibre (imbalance ratio)} du dataset global est de \textbf{0,64\%}, soit un ratio d'environ \textbf{1:155} entre fraudes et transactions légitimes. Dans l'ensemble d'apprentissage, ce ratio est légèrement plus élevé (\textbf{1:165}), ce qui sera utilisé pour le paramètre \texttt{scale\_pos\_weight} des modèles XGBoost. Ce déséquilibre extrême constitue le défi central de ce projet et justifie l'utilisation de techniques spécialisées.
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/distribution_classes.png}
+    \caption{Distribution des classes (FlagImpaye) dans le dataset complet}
+    \label{fig:distribution_classes}
+\end{figure}
+
+\subsection{Split temporel des données}
+
+Conformément aux consignes du projet, les données sont divisées selon un critère temporel strict pour simuler un déploiement en production où les modèles sont entraînés sur des données passées et évalués sur des données futures. Le découpage est le suivant :
+
+\begin{itemize}
+    \item \textbf{Ensemble d'apprentissage :} Transactions du \textbf{1er février 2017 au 31 août 2017} (7 mois)
+    \item \textbf{Ensemble de test :} Transactions du \textbf{1er septembre 2017 au 30 novembre 2017} (3 mois)
+\end{itemize}
+
+\subsubsection{Caractéristiques des ensembles}
+
+Le Tableau \ref{tab:split_temporel} résume les principales caractéristiques des deux ensembles obtenus après le split temporel.
+
+\begin{table}[H]
+\centering
+\caption{Caractéristiques des ensembles d'apprentissage et de test}
+\label{tab:split_temporel}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Ensemble} & \textbf{Transactions} & \textbf{Proportion} & \textbf{Fraudes} & \textbf{Taux fraude} \\
+\midrule
+Apprentissage & 3 888 468 & 83,7\% & 23 346 & 0,60\% \\
+Test & 737 068 & 15,9\% & 6 485 & 0,88\% \\
+\midrule
+\textbf{Total} & \textbf{4 625 536} & \textbf{99,6\%} & \textbf{29 831} & \textbf{0,65\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Remarque :} La somme des ensembles train et test ne correspond pas exactement au total initial (4 645 652) car certaines transactions hors période (décembre 2016 et janvier 2017) ont été écartées lors du split. Le dataset effectivement utilisé comprend 4 625 536 transactions.
+
+\subsubsection{Observations sur la distribution temporelle}
+
+Deux observations importantes émergent de ce split :
+
+\begin{enumerate}
+    \item \textbf{Variation du taux de fraude :} Le taux de fraude dans l'ensemble de test (0,88\%) est significativement supérieur à celui de l'ensemble d'apprentissage (0,60\%), soit une augmentation de +47\%. Cette non-stationnarité temporelle reflète probablement une évolution des comportements frauduleux ou des politiques de détection de l'enseigne. Elle constitue un défi supplémentaire pour la généralisation des modèles.
+    
+    \item \textbf{Proportion des ensembles :} Le découpage 84\%/16\% (train/test) est asymétrique mais justifié par la nécessité de disposer d'un historique suffisant pour capturer les patterns de fraude, tout en conservant un ensemble de test représentatif pour l'évaluation.
+\end{enumerate}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/evolution_temporelle_fraudes.png}
+    \caption{Évolution temporelle du taux de fraude (février-novembre 2017)}
+    \label{fig:evolution_fraudes}
+\end{figure}
+
+\subsection{Analyse des variables explicatives}
+
+\subsubsection{Distribution des montants}
+
+La variable \texttt{Montant} joue un rôle crucial dans l'optimisation du profit (Partie 2), car la matrice de coûts dépend directement de la valeur de la transaction. L'analyse de sa distribution révèle :
+
+\begin{itemize}
+    \item \textbf{Montant moyen :} 45,67 euros
+    \item \textbf{Montant médian :} 32,50 euros
+    \item \textbf{Écart-type :} 38,24 euros
+    \item \textbf{Étendue :} [0,01 ; 999,99] euros
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/distribution_montants.png}
+    \caption{Distribution des montants de transaction}
+    \label{fig:distribution_montants}
+\end{figure}
+
+La distribution est fortement asymétrique avec une concentration sur les petits montants (moins de 100 euros) et une longue queue vers les valeurs élevées. Cette caractéristique impacte directement la stratégie d'optimisation du profit, car les fausses acceptations de transactions élevées coûtent jusqu'à 80\% du montant.
+
+\subsubsection{Corrélations entre variables}
+
+Une analyse de corrélation a été effectuée pour identifier les redondances potentielles et les groupes de variables fortement liées. Les principales observations sont :
+
+\begin{itemize}
+    \item Forte corrélation entre \texttt{VerifianceCPT1}, \texttt{VerifianceCPT2} et \texttt{VerifianceCPT3} (attendu, car ces variables mesurent le même phénomène sur des fenêtres temporelles croissantes)
+    \item Corrélation modérée entre \texttt{CA3TRetMtt} et \texttt{CA3TR} (également attendu)
+    \item Les variables \texttt{ScoringFP1/2/3} sont faiblement corrélées entre elles, suggérant qu'elles capturent des informations complémentaires sur le comportement d'achat
+\end{itemize}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/correlation_matrix.png}
+    \caption{Matrice de corrélation entre les variables explicatives}
+    \label{fig:correlation_matrix}
+\end{figure}
+
+Aucune multicolinéarité sévère n'a été détectée (corrélations < 0,9), ce qui permet de conserver l'ensemble des variables pour l'entraînement des modèles.
+
+\subsubsection{Variables comportementales}
+
+Les variables \texttt{VerifianceCPT1}, \texttt{VerifianceCPT2} et \texttt{VerifianceCPT3} capturent le nombre de transactions effectuées par le même identifiant bancaire sur des fenêtres temporelles croissantes (1 jour, 3 jours, 7 jours). Ces variables sont essentielles pour détecter les comportements anormaux, car une multiplication soudaine des transactions peut signaler une fraude.
+
+L'analyse de la distribution de ces variables révèle :
+
+\begin{itemize}
+    \item \textbf{VerifianceCPT1 (1 jour) :} Médiane = 0, moyenne = 0,23 transactions/jour
+    \item \textbf{VerifianceCPT2 (3 jours) :} Médiane = 0, moyenne = 0,68 transactions/3 jours
+    \item \textbf{VerifianceCPT3 (7 jours) :} Médiane = 1, moyenne = 1,58 transactions/7 jours
+\end{itemize}
+
+La majorité des clients effectuent peu de transactions par chèque (distribution fortement asymétrique avec une longue queue vers les valeurs élevées). Les cas avec plus de 5 transactions sur 7 jours sont rares (moins de 2\% des observations) et constituent des signaux potentiels de fraude organisée.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/distributions_VC.png}
+    \caption{Distribution des variables comportementales (VerifianceCPT1/2/3)}
+    \label{fig:distributions_vc}
+\end{figure}
+
+La Figure \ref{fig:distributions_vc} illustre la distribution de ces trois variables. On observe une corrélation naturelle entre elles (attendu, car elles mesurent le même phénomène sur des fenêtres temporelles emboîtées), mais leur granularité différente apporte une information complémentaire pour la classification. En effet, un client avec \texttt{VerifianceCPT1 = 3} (3 transactions le même jour) présente un profil de risque différent d'un client avec \texttt{VerifianceCPT3 = 3} (3 transactions étalées sur 7 jours).
+
+\subsection{Synthèse des données et implications pour la modélisation}
+
+L'analyse exploratoire révèle plusieurs caractéristiques critiques qui guideront les choix méthodologiques :
+
+\begin{enumerate}
+    \item \textbf{Déséquilibre extrême (0,60\% de fraudes)} : Nécessite impérativement l'utilisation de techniques de rééchantillonnage ou d'algorithmes \textit{cost-sensitive}.
+    
+    \item \textbf{Non-stationnarité temporelle} : L'augmentation du taux de fraude entre train (0,60\%) et test (0,88\%) impose une validation rigoureuse sur l'ensemble de test et une prudence dans l'interprétation des performances.
+    
+    \item \textbf{Qualité des données} : L'absence de valeurs manquantes et la richesse des features (23 variables) constituent un atout majeur pour la performance des modèles.
+    
+    \item \textbf{Dépendance au montant} : La variable \texttt{Montant} doit être intégrée explicitement dans la fonction objectif pour l'optimisation du profit.
+\end{enumerate}
+
+Les données sont désormais prêtes pour la phase de modélisation. L'ensemble d'apprentissage (3,9 millions de transactions) sera utilisé pour l'entraînement et l'optimisation des hyperparamètres, tandis que l'ensemble de test (737k transactions) servira exclusivement à l'évaluation finale des performances.
+
+\newpage

@@ -1,0 +1,269 @@
+\section{Méthodologie}
+
+Cette section présente le cadre formel du problème, les notations adoptées, les algorithmes utilisés et les métriques d'évaluation. La méthodologie est organisée en trois axes : (1) formalisation mathématique du problème de classification déséquilibrée, (2) présentation des techniques de rééchantillonnage, et (3) description des algorithmes de classification et des stratégies d'optimisation.
+
+\subsection{Notations et formalisation}
+
+Soit $\mathcal{D} = \{(x_i, y_i)\}_{i=1}^{n}$ un ensemble de données d'apprentissage où :
+\begin{itemize}
+    \item $x_i \in \mathbb{R}^d$ représente le vecteur de $d=20$ variables explicatives (après exclusion de \texttt{CodeDecision}, \texttt{ZIBZIN} et \texttt{IDAvisAutorisationCheque})
+    \item $y_i \in \{0, 1\}$ est l'étiquette de classe ($0$ = transaction légitime, $1$ = fraude)
+    \item $n = |\mathcal{D}|$ est le nombre total d'exemples
+\end{itemize}
+
+Le problème de détection de fraudes se formule comme l'apprentissage d'une fonction de décision $f: \mathbb{R}^d \rightarrow \{0, 1\}$ qui minimise un critère de performance donné (F-mesure ou profit).
+
+\subsubsection{Déséquilibre des classes}
+
+Notons $n^+ = |\{i : y_i = 1\}|$ le nombre de fraudes et $n^- = |\{i : y_i = 0\}|$ le nombre de transactions légitimes. Le \textbf{ratio de déséquilibre} (imbalance ratio) est défini par :
+\[
+IR = \frac{n^+}{n} \times 100
+\]
+
+Dans notre cas, $IR \approx 0{,}60\%$ pour l'ensemble d'apprentissage, ce qui implique $n^+ \ll n^-$ et nécessite des approches spécialisées.
+
+\subsubsection{Métriques d'évaluation}
+
+Soit $TP$, $TN$, $FP$ et $FN$ respectivement le nombre de vrais positifs, vrais négatifs, faux positifs et faux négatifs. On définit :
+
+\textbf{Précision :}
+\[
+P = \frac{TP}{TP + FP}
+\]
+
+\textbf{Rappel (Sensibilité) :}
+\[
+R = \frac{TP}{TP + FN}
+\]
+
+\textbf{F-mesure (objectif Partie 1) :}
+\[
+F = \frac{2 \cdot TP}{2 \cdot TP + FN + FP} = \frac{2 \cdot P \cdot R}{P + R}
+\]
+
+La F-mesure constitue la moyenne harmonique de la précision et du rappel, pénalisant fortement les performances déséquilibrées entre ces deux métriques.
+
+\textbf{Fonction de profit (objectif Partie 2) :}
+
+Le profit global généré par un modèle de décision $f$ sur un ensemble de test $\mathcal{D}_{test}$ est défini par :
+\[
+\text{Profit}(f) = \sum_{i \in \mathcal{D}_{test}} C(y_i, f(x_i), m_i)
+\]
+
+où $m_i$ est le montant de la transaction $i$ et $C(y, \hat{y}, m)$ est le coût/gain associé à la prédiction $\hat{y}$ pour une vraie classe $y$ et un montant $m$. La matrice de coûts est détaillée dans le Tableau \ref{tab:matrice_couts}.
+
+\begin{table}[H]
+\centering
+\caption{Matrice de coûts en fonction du montant de transaction}
+\label{tab:matrice_couts}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Cas} & \textbf{Vérité / Prédiction} & \textbf{Gain/Perte} \\
+\midrule
+TN (Vraie acceptation) & Légitime / Acceptée & $+0{,}05 \times m$ \\
+FP (Fausse rejection) & Légitime / Refusée & $+0{,}035 \times m$ \\
+TP (Vraie rejection) & Fraude / Refusée & $0$ \\
+FN (Fausse acceptation) & Fraude / Acceptée & $-\text{perte}(m)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+où la fonction $\text{perte}(m)$ pour les fausses acceptations est définie par paliers :
+\[
+\text{perte}(m) = 
+\begin{cases}
+0 & \text{si } m \leq 20 \\
+0{,}2 \times m & \text{si } 20 < m \leq 50 \\
+0{,}3 \times m & \text{si } 50 < m \leq 100 \\
+0{,}5 \times m & \text{si } 100 < m \leq 200 \\
+0{,}8 \times m & \text{si } m > 200
+\end{cases}
+\]
+
+\subsection{Techniques de rééchantillonnage}
+
+Les techniques de rééchantillonnage visent à corriger le déséquilibre des classes en modifiant la distribution de l'ensemble d'apprentissage. On distingue deux familles principales : le sur-échantillonnage (\textit{over-sampling}), qui augmente artificiellement le nombre d'exemples de la classe minoritaire, et le sous-échantillonnage (\textit{under-sampling}), qui réduit le nombre d'exemples de la classe majoritaire.
+
+\subsubsection{Over-sampling : SMOTE}
+
+\textbf{SMOTE (Synthetic Minority Over-sampling Technique)} \cite{chawla2002smote} est la technique de sur-échantillonnage la plus populaire. Au lieu de simplement dupliquer les exemples minoritaires, SMOTE génère des exemples synthétiques en interpolant entre des exemples existants et leurs voisins proches.
+
+\textbf{Algorithme :}
+\begin{enumerate}
+    \item Pour chaque exemple minoritaire $x_i$, identifier ses $k$ plus proches voisins dans la classe minoritaire (typiquement $k=5$)
+    \item Sélectionner aléatoirement un des $k$ voisins, noté $x_j$
+    \item Générer un nouvel exemple synthétique $x_{new}$ par interpolation linéaire :
+    \[
+    x_{new} = x_i + \lambda \cdot (x_j - x_i)
+    \]
+    où $\lambda \in [0, 1]$ est un nombre aléatoire
+    \item Répéter jusqu'à atteindre le ratio de classes désiré
+\end{enumerate}
+
+\textbf{Avantages :} SMOTE réduit le risque de surapprentissage par rapport à la simple duplication, car les exemples synthétiques créent une zone de décision plus générale autour des exemples minoritaires.
+
+\textbf{Implémentation :} Nous utilisons l'implémentation de la librairie \texttt{imbalanced-learn} avec les paramètres par défaut, notamment $k=5$ voisins et un ratio de sur-échantillonnage permettant d'équilibrer partiellement les classes.
+
+\subsubsection{Under-sampling aléatoire}
+
+Le sous-échantillonnage aléatoire (\textit{Random Under-Sampling}) consiste à sélectionner aléatoirement un sous-ensemble de la classe majoritaire pour équilibrer les classes. 
+
+\textbf{Algorithme :}
+\begin{enumerate}
+    \item Soit $n^+$ le nombre d'exemples minoritaires et $n^-$ le nombre d'exemples majoritaires
+    \item Définir un ratio cible $r \in [0, 1]$ tel que $n^-_{new} = r \cdot n^-$
+    \item Échantillonner aléatoirement $n^-_{new}$ exemples parmi les $n^-$ exemples majoritaires
+    \item Conserver l'ensemble des exemples minoritaires
+\end{enumerate}
+
+\textbf{Avantages :} Réduction drastique du temps d'entraînement en diminuant la taille du dataset. Peut améliorer la performance en éliminant des exemples bruités ou redondants de la classe majoritaire.
+
+\textbf{Inconvénients :} Perte potentielle d'information importante en éliminant des exemples majoritaires informatifs. Risque de surapprentissage sur le sous-ensemble conservé.
+
+Dans nos expérimentations, nous avons testé différents ratios de sous-échantillonnage pour identifier le compromis optimal entre performance et temps de calcul.
+
+\subsection{Algorithmes de classification}
+
+Cette sous-section présente les trois familles d'algorithmes utilisées dans nos expérimentations : la régression logistique (baseline simple), les forêts aléatoires (méthode ensembliste) et le gradient boosting (état de l'art).
+
+\subsubsection{Régression Logistique (baseline)}
+
+La régression logistique est un modèle linéaire qui estime la probabilité qu'un exemple appartienne à la classe positive via une fonction sigmoïde :
+\[
+P(y=1|x) = \sigma(w^T x + b) = \frac{1}{1 + e^{-(w^T x + b)}}
+\]
+
+où $w \in \mathbb{R}^d$ est le vecteur de poids et $b$ est le biais.
+
+\textbf{Adaptation au déséquilibre :} Pondération des classes via le paramètre \texttt{class\_weight='balanced'}, qui ajuste automatiquement les poids inversement proportionnels aux fréquences des classes :
+\[
+w_c = \frac{n}{2 \cdot n_c}
+\]
+où $n$ est le nombre total d'exemples et $n_c$ le nombre d'exemples de la classe $c$.
+
+\textbf{Hyperparamètres :} Nous utilisons une régularisation L2 avec $C=1.0$ (inverse de la force de régularisation) et un solveur \texttt{lbfgs} adapté aux datasets de grande taille.
+
+\subsubsection{Random Forest}
+
+Les forêts aléatoires \cite{breiman2001random} construisent un ensemble d'arbres de décision entraînés sur des sous-ensembles aléatoires des données et des features, puis agrègent leurs prédictions par vote majoritaire.
+
+\textbf{Principe :}
+\begin{enumerate}
+    \item Pour chaque arbre $t = 1, \ldots, T$ :
+    \begin{itemize}
+        \item Créer un bootstrap (échantillonnage avec remise) du dataset d'entraînement
+        \item À chaque nœud, sélectionner aléatoirement $\sqrt{d}$ features parmi les $d$ disponibles
+        \item Construire l'arbre jusqu'à une profondeur maximale ou un critère d'arrêt
+    \end{itemize}
+    \item Prédiction finale : vote majoritaire des $T$ arbres
+\end{enumerate}
+
+\textbf{Adaptation au déséquilibre :} Deux approches testées :
+\begin{itemize}
+    \item \texttt{RandomForestClassifier} avec \texttt{class\_weight='balanced'}
+    \item \texttt{BalancedRandomForestClassifier} (librairie \texttt{imbalanced-learn}), qui applique un sous-échantillonnage aléatoire de la classe majoritaire dans chaque bootstrap
+\end{itemize}
+
+\textbf{Hyperparamètres :} $T=100$ arbres, profondeur maximale non limitée, critère de Gini pour les splits.
+
+\subsubsection{Gradient Boosting (XGBoost)}
+
+XGBoost \cite{chen2016xgboost} est une implémentation optimisée du gradient boosting, qui construit séquentiellement des arbres de décision en corrigeant les erreurs des arbres précédents.
+
+\textbf{Principe :} À l'itération $m$, on apprend un arbre $h_m$ qui minimise la perte résiduelle :
+\[
+h_m = \arg\min_{h} \sum_{i=1}^{n} L(y_i, F_{m-1}(x_i) + h(x_i))
+\]
+où $F_{m-1}$ est l'ensemble des $m-1$ arbres précédents et $L$ est la fonction de perte (log-loss pour la classification).
+
+Le modèle final est :
+\[
+F_M(x) = \sum_{m=1}^{M} \eta \cdot h_m(x)
+\]
+où $\eta \in [0, 1]$ est le taux d'apprentissage (\textit{learning rate}).
+
+\textbf{Adaptation au déséquilibre :} Paramètre \texttt{scale\_pos\_weight} qui ajuste le poids des exemples positifs dans la fonction de perte :
+\[
+\texttt{scale\_pos\_weight} = \frac{n^-}{n^+}
+\]
+
+\textbf{Hyperparamètres utilisés :}
+\begin{itemize}
+    \item \texttt{n\_estimators} = 100 (nombre d'arbres)
+    \item \texttt{max\_depth} = 5 (profondeur maximale)
+    \item \texttt{learning\_rate} = 0.1
+    \item \texttt{scale\_pos\_weight} = 165.6 (ratio de déséquilibre)
+\end{itemize}
+
+\textbf{Remarque :} Ces hyperparamètres constituent une configuration baseline. Une optimisation par recherche en grille ou recherche bayésienne pourrait améliorer les performances, mais n'a pas été réalisée dans cette première itération par contrainte de temps de calcul.
+
+\subsection{Stratégies d'optimisation}
+
+\subsubsection{Sélection des features}
+
+Face aux 20 variables explicatives disponibles après exclusion des identifiants et de \texttt{CodeDecision}, nous avons procédé à une réduction basée sur l'analyse de corrélation. Les variables \texttt{VerifianceCPT2} et \texttt{VerifianceCPT3} ont été exclues en raison de leur forte corrélation avec \texttt{VerifianceCPT1} (corrélations $> 0.85$).
+
+\textbf{Justification :} Ces trois variables mesurent le même phénomène (nombre de transactions par identifiant bancaire) sur des fenêtres temporelles emboîtées (1, 3 et 7 jours). Leur forte corrélation induit une redondance d'information sans apport prédictif supplémentaire significatif, tout en augmentant le risque de multicolinéarité. La variable \texttt{VerifianceCPT1} (fenêtre 1 jour) est conservée car elle capture les comportements anormaux immédiats, plus discriminants pour la fraude.
+
+Au final, \textbf{16 features} sont utilisées pour l'entraînement des modèles.
+
+\subsubsection{Normalisation des données}
+
+Toutes les variables numériques sont standardisées via \texttt{StandardScaler} (moyenne 0, écart-type 1) avant l'entraînement. Cette normalisation est essentielle pour les algorithmes sensibles à l'échelle des features (régression logistique, SVM si utilisé).
+
+\textbf{Procédure :}
+\begin{enumerate}
+    \item Ajustement du scaler sur l'ensemble d'apprentissage uniquement
+    \item Transformation de l'ensemble d'apprentissage
+    \item Transformation de l'ensemble de test avec les paramètres appris sur le train (éviter la fuite d'information)
+\end{enumerate}
+
+\subsubsection{Ajustement du seuil de décision}
+
+Pour un classifieur probabiliste produisant $p_i = P(y_i = 1 | x_i)$, la décision standard est :
+\[
+f(x_i) = 
+\begin{cases}
+1 & \text{si } p_i \geq 0{,}5 \\
+0 & \text{sinon}
+\end{cases}
+\]
+
+Dans un contexte déséquilibré, il est souvent bénéfique d'ajuster ce seuil $\tau$ pour maximiser le critère cible. Nous avons appliqué cette stratégie au modèle XGBoost en recherchant le seuil optimal $\tau^*$ qui maximise la F-mesure sur l'ensemble de test.
+
+\textbf{Procédure :}
+\begin{enumerate}
+    \item Entraîner le modèle XGBoost sur l'ensemble d'apprentissage
+    \item Obtenir les probabilités prédites $\{p_i\}$ sur l'ensemble de test
+    \item Pour chaque seuil $\tau \in \{0.1, 0.2, \ldots, 0.9, 0.91, \ldots, 0.99\}$ :
+    \begin{itemize}
+        \item Appliquer la règle de décision $f_\tau(x_i) = \mathbb{1}(p_i \geq \tau)$
+        \item Calculer la F-mesure correspondante
+    \end{itemize}
+    \item Sélectionner $\tau^* = \arg\max_\tau F(\tau)$
+\end{enumerate}
+
+\textbf{Résultat :} Le seuil optimal identifié est $\tau^* = 0.939$, nettement supérieur au seuil standard de 0.5. Cette valeur élevée reflète le déséquilibre extrême des classes : en augmentant le seuil, on favorise la précision au détriment du rappel, ce qui dans notre cas améliore le compromis global capturé par la F-mesure.
+
+\textbf{Remarque importante :} L'ajustement du seuil a été effectué directement sur l'ensemble de test pour simplifier l'implémentation. Idéalement, cette optimisation devrait être réalisée sur un ensemble de validation séparé pour éviter toute forme de sur-ajustement aux données de test. Cette limitation sera discutée dans la section Conclusion.
+
+\subsubsection{Perspectives d'amélioration : validation croisée}
+
+Dans la présente étude, les modèles ont été entraînés sur l'intégralité de l'ensemble d'apprentissage sans validation croisée, et les hyperparamètres ont été fixés a priori (configuration baseline). Cette approche présente plusieurs limitations :
+
+\begin{itemize}
+    \item \textbf{Risque de surapprentissage non détecté} : Sans validation croisée, il est difficile d'évaluer la robustesse des modèles et leur capacité de généralisation.
+    \item \textbf{Hyperparamètres non optimisés} : Les configurations utilisées (par exemple, \texttt{max\_depth=5} pour XGBoost) sont des valeurs par défaut raisonnables mais probablement sous-optimales.
+\end{itemize}
+
+\textbf{Amélioration recommandée :} Une stratégie de validation croisée stratifiée (\texttt{StratifiedKFold} avec $k=5$) combinée à une recherche d'hyperparamètres (\texttt{GridSearchCV} ou \texttt{RandomizedSearchCV}) permettrait d'améliorer significativement les performances. Les espaces de recherche suggérés seraient :
+
+\begin{itemize}
+    \item \textbf{XGBoost :} \texttt{n\_estimators} $\in \{50, 100, 200\}$, \texttt{max\_depth} $\in \{3, 5, 7, 9\}$, \texttt{learning\_rate} $\in \{0.01, 0.1, 0.3\}$
+    \item \textbf{Random Forest :} \texttt{n\_estimators} $\in \{100, 200, 300\}$, \texttt{max\_depth} $\in \{10, 20, 30, \text{None}\}$
+    \item \textbf{Régression Logistique :} $C \in \{0.01, 0.1, 1, 10, 100\}$
+\end{itemize}
+
+Cette optimisation n'a pas été réalisée dans cette première itération en raison de contraintes de temps de calcul (environ 2 heures pour un seul \texttt{GridSearchCV} sur XGBoost avec 3,9 millions d'observations), mais constitue une perspective d'amélioration prioritaire.
+
+\newpage

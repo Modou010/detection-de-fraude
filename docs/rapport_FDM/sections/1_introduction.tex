@@ -1,0 +1,75 @@
+\section{Introduction}
+
+\subsection{Contexte et problématique}
+
+La détection de fraudes bancaires représente un enjeu majeur pour les enseignes de la grande distribution et les établissements financiers. Chaque année, des milliards d'euros sont perdus à cause de transactions frauduleuses par chèque, impactant directement la rentabilité des commerçants et la confiance des consommateurs. Dans ce contexte, les systèmes d'aide à la décision basés sur l'apprentissage automatique constituent une solution prometteuse pour identifier automatiquement les transactions suspectes en temps réel.
+
+Ce projet s'inscrit dans cette problématique en exploitant des données réelles issues d'une enseigne de la grande distribution française, en collaboration avec la Fédération Nationale des Caisses d'Épargne (FNCI) et la Banque de France. Le jeu de données couvre 10 mois de transactions par chèque (février à novembre 2017) et comprend 4,6 millions de transactions décrites par 23 variables issues de \textit{feature engineering} approfondi. L'objectif est double : d'une part, maximiser la F-mesure pour optimiser la détection des fraudes, et d'autre part, maximiser la marge commerciale en tenant compte des coûts réels associés aux différents types d'erreurs de classification.
+
+\subsection{Défis liés aux données déséquilibrées}
+
+Le principal défi de ce projet réside dans le déséquilibre extrême des classes : moins de 1\% des transactions sont frauduleuses (0,60\% dans l'ensemble d'apprentissage). Cette caractéristique rend les algorithmes de classification classiques inadaptés, car ils tendent à favoriser la classe majoritaire et à ignorer les fraudes, pourtant critiques d'un point de vue métier. Plusieurs difficultés en découlent :
+
+\begin{itemize}
+    \item \textbf{Biais de prédiction :} Les modèles standards maximisent l'exactitude globale (\textit{accuracy}), qui peut atteindre 99\% en prédisant systématiquement "non-fraude", sans pour autant détecter une seule transaction frauduleuse.
+    \item \textbf{Mesures d'évaluation inappropriées :} L'exactitude globale n'est pas pertinente ; il faut privilégier des métriques comme la F-mesure, le rappel ou l'AUC-ROC qui capturent mieux la performance sur la classe minoritaire.
+    \item \textbf{Coûts asymétriques :} Accepter une fraude (faux négatif) coûte bien plus cher que refuser une transaction légitime (faux positif), ce qui nécessite d'intégrer une matrice de coûts dans l'optimisation.
+\end{itemize}
+
+Pour surmonter ces obstacles, plusieurs familles de méthodes existent : le rééchantillonnage des données (\textit{oversampling}, \textit{undersampling}), les algorithmes \textit{cost-sensitive} qui pondèrent différemment les erreurs, et les approches ensemblistes adaptées au déséquilibre.
+
+\subsection{Objectifs du projet}
+
+Ce projet vise à développer et comparer plusieurs systèmes de détection de fraudes répondant à deux critères d'optimisation distincts :
+
+\begin{enumerate}
+    \item \textbf{Optimisation de la F-mesure (Partie 1) :} Construire au moins 5 modèles différents (algorithmes seuls ou couplés à des techniques de rééchantillonnage) et identifier celui qui maximise la F-mesure sur l'ensemble de test. La F-mesure, définie par :
+    \[
+    F = \frac{2 \cdot TP}{2 \cdot TP + FN + FP}
+    \]
+    où $TP$ (vrais positifs), $FN$ (faux négatifs) et $FP$ (faux positifs), constitue un compromis entre précision et rappel adapté au contexte déséquilibré.
+    
+    \item \textbf{Optimisation du profit (Partie 2) :} Développer des modèles orientés profit en tenant compte d'une matrice de coûts réaliste fournie dans le sujet. Cette matrice associe un gain de 5\% du montant aux bonnes acceptations, des pertes variables (0\% à 80\% du montant) aux fausses acceptations selon le montant de la transaction, et un gain partiel de 3,5\% aux bonnes rejections. L'objectif est de minimiser l'écart au profit maximal théorique.
+\end{enumerate}
+
+\subsection{État de l'art et approches explorées}
+
+Les travaux académiques et industriels sur la détection de fraudes en contexte déséquilibré ont identifié plusieurs familles d'approches efficaces :
+
+\textbf{Techniques de rééchantillonnage :}
+\begin{itemize}
+    \item \textit{Oversampling} : SMOTE \cite{chawla2002smote} génère des exemples synthétiques de la classe minoritaire en interpolant entre voisins proches. Des variantes comme Borderline-SMOTE et ADASYN améliorent la génération en ciblant les zones frontières.
+    \item \textit{Undersampling} : réduction de la classe majoritaire via échantillonnage aléatoire ou sélection informée (Tomek Links, NearMiss).
+    \item Approches hybrides : SMOTE+ENN et SMOTE+Tomek combinent génération d'exemples et nettoyage des données.
+\end{itemize}
+
+\textbf{Algorithmes de classification :}
+\begin{itemize}
+    \item Arbres de décision et forêts aléatoires, robustes au déséquilibre et interprétables.
+    \item Machines à vecteurs de support (SVM), performantes avec pondération des classes.
+    \item Gradient Boosting, particulièrement efficace avec ajustement de la fonction de perte.
+    \item Méthodes à base de distance (k-NN) avec pondération adaptative.
+\end{itemize}
+
+\textbf{Approches \textit{cost-sensitive} :}
+\begin{itemize}
+    \item Pondération des classes inversement proportionnelle à leur fréquence.
+    \item Optimisation directe de la fonction de perte métier (profit, F-mesure).
+    \item Ajustement du seuil de décision en post-traitement pour maximiser le critère cible.
+\end{itemize}
+
+Des travaux récents \cite{these_reference} sur des données similaires ont montré que les méthodes Random Forest avec règles de décision orientées profit (RFprof) et Gradient Boosting avec perte personnalisée (GBprof) atteignent des performances supérieures aux baselines classiques, avec un écart au profit maximal de 0,69.
+
+\subsection{Structure du rapport}
+
+Ce rapport est organisé comme suit :
+
+\textbf{Section 2 - Analyse des données :} Présentation du jeu de données, statistiques descriptives, analyse du déséquilibre et exploration des variables pertinentes.
+
+\textbf{Section 3 - Méthodologie :} Formalisation mathématique du problème, présentation des algorithmes utilisés et des stratégies de rééchantillonnage, définition des métriques d'évaluation.
+
+\textbf{Section 4 - Expériences :} Description du protocole expérimental (split temporel, validation croisée, optimisation des hyperparamètres), présentation et analyse comparative des résultats obtenus pour les deux objectifs (F-mesure et profit).
+
+\textbf{Section 5 - Conclusion :} Synthèse des contributions, discussion des résultats, limites identifiées et perspectives d'amélioration.
+
+\newpage

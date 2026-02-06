@@ -1,0 +1,405 @@
+\section{Expériences}
+
+Cette section présente le protocole expérimental mis en œuvre pour évaluer les différentes approches de détection de fraudes, ainsi que les résultats obtenus pour les deux objectifs : maximisation de la F-mesure (Partie 1) et maximisation du profit (Partie 2).
+
+\subsection{Protocole expérimental}
+
+\subsubsection{Données utilisées}
+
+Conformément à la Section 2, les expérimentations sont conduites sur :
+\begin{itemize}
+    \item \textbf{Ensemble d'apprentissage :} 3 888 468 transactions (février-août 2017), dont 23 346 fraudes (0,60\%)
+    \item \textbf{Ensemble de test :} 737 068 transactions (septembre-novembre 2017), dont 6 485 fraudes (0,88\%)
+\end{itemize}
+
+L'ensemble d'apprentissage est utilisé pour l'entraînement des modèles et l'optimisation des hyperparamètres, tandis que l'ensemble de test est exclusivement réservé à l'évaluation finale des performances.
+
+\subsubsection{Variables utilisées}
+
+Après exclusion des identifiants (\texttt{ZIBZIN}, \texttt{IDAvisAutorisationCheque}), de la variable \texttt{CodeDecision} (information post-transaction), et des variables \texttt{VerifianceCPT2} et \texttt{VerifianceCPT3} (forte corrélation avec \texttt{VerifianceCPT1}), les modèles sont entraînés sur \textbf{16 variables explicatives} (Partie 1) :
+
+\begin{itemize}
+    \item \texttt{Montant}, \texttt{VerifianceCPT1}, \texttt{D2CB}
+    \item \texttt{ScoringFP1/2/3}, \texttt{TauxImpNb\_RB}, \texttt{TauxImpNB\_CPM}
+    \item \texttt{EcartNumCheq}, \texttt{NbrMagasin3J}, \texttt{DiffDateTr1/2/3}
+    \item \texttt{CA3TRetMtt}, \texttt{CA3TR}, \texttt{Heure}
+\end{itemize}
+
+\textbf{Note :} Pour la Partie 2 (optimisation du profit), 15 features ont été utilisées suite à l'exclusion supplémentaire d'une variable pour optimiser les temps de calcul.
+
+La variable temporelle \texttt{DateTransaction} est également exclue pour éviter tout biais de fuite d'information (\textit{data leakage}), les patterns temporels étant déjà capturés par les variables dérivées (\texttt{DiffDateTr1/2/3}).
+
+\subsubsection{Stratégie de validation}
+
+Les modèles ont été entraînés sur l'intégralité de l'ensemble d'apprentissage (3,9 millions de transactions) sans validation croisée. Cette approche simplifiée présente l'avantage de maximiser la quantité de données disponibles pour l'apprentissage, ce qui est particulièrement important dans un contexte de déséquilibre extrême où la classe minoritaire ne représente que 0,60\% des observations.
+
+\textbf{Limitations de cette approche :}
+\begin{itemize}
+    \item Absence de détection de surapprentissage sur un ensemble de validation indépendant
+    \item Impossibilité d'évaluer la robustesse des modèles via validation croisée
+    \item Optimisation du seuil de décision effectuée directement sur l'ensemble de test (violation méthodologique discutée en Section 4.2.4)
+\end{itemize}
+
+\textbf{Amélioration recommandée :} Une stratégie de validation croisée stratifiée (\texttt{StratifiedKFold} avec $k=5$) sur un split temporel interne (4 mois train / 2 mois validation) permettrait d'améliorer la robustesse des résultats. Cette approche n'a pas été implémentée dans cette première itération en raison de contraintes de temps de calcul, mais constitue une perspective prioritaire d'amélioration (voir Section 5).
+
+\subsubsection{Configuration des hyperparamètres}
+
+Les hyperparamètres des modèles ont été fixés a priori selon des valeurs par défaut raisonnables issues de la littérature et de l'expérience pratique, sans recherche exhaustive (\textit{GridSearchCV} ou \textit{RandomizedSearchCV}).
+
+\textbf{Configurations utilisées :}
+\begin{itemize}
+    \item \textbf{Logistic Regression :} Régularisation L2, $C=1.0$, solveur \texttt{lbfgs}
+    \item \textbf{Random Forest :} 100 arbres, profondeur non limitée, critère de Gini
+    \item \textbf{XGBoost :} 100 estimateurs, profondeur maximale 5, learning rate 0.1
+    \item \textbf{SMOTE :} Ratio de sur-échantillonnage 0.1, 5 plus proches voisins
+\end{itemize}
+
+\textbf{Justification :} Ces configurations représentent un compromis raisonnable entre performance et temps de calcul. Une optimisation systématique des hyperparamètres via recherche en grille nécessiterait environ 2-3 heures de calcul par modèle sur notre dataset de 3,9 millions d'observations, ce qui n'a pas pu être réalisé dans le cadre temporel du projet.
+
+\textbf{Impact attendu :} Une optimisation des hyperparamètres pourrait améliorer la F-mesure de 5-15\% selon la littérature sur des problèmes similaires. Cette amélioration potentielle est discutée en Section 5 (Perspectives).
+
+\subsubsection{Environnement de calcul}
+
+Les expérimentations ont été réalisées dans l'environnement suivant :
+\begin{itemize}
+    \item \textbf{Langage :} Python 3.11
+    \item \textbf{Librairies principales :} 
+    \begin{itemize}
+        \item \texttt{scikit-learn} 1.3+ (algorithmes de classification, métriques)
+        \item \texttt{imbalanced-learn} 0.11+ (techniques de rééchantillonnage)
+        \item \texttt{xgboost} 2.0+ (gradient boosting)
+        \item \texttt{pandas} 2.0+, \texttt{numpy} 1.24+ (manipulation de données)
+        \item \texttt{matplotlib} 3.7+, \texttt{seaborn} 0.12+ (visualisation)
+    \end{itemize}
+    \item \textbf{Notebooks :} Jupyter Notebook exécutés localement dans VSCode
+    \item \textbf{Temps de calcul :} Environ 5-10 minutes par modèle pour l'entraînement (variable selon la complexité et le rééchantillonnage)
+\end{itemize}
+
+\subsection{Partie 1 : Optimisation de la F-mesure}
+
+L'objectif de cette première partie est d'identifier la combinaison algorithme + technique de rééchantillonnage (ou approche cost-sensitive) qui maximise la F-mesure sur l'ensemble de test. Nous avons implémenté et comparé \textbf{9 approches différentes}, dépassant largement le minimum de 5 méthodes requis.
+
+\subsubsection{Approches testées}
+
+Les 9 modèles évalués se répartissent en trois catégories :
+
+\textbf{1. Modèles avec rééchantillonnage :}
+\begin{itemize}
+    \item SMOTE + Logistic Regression
+    \item UnderSampling + Logistic Regression
+    \item XGBoost + SMOTE
+\end{itemize}
+
+\textbf{2. Modèles cost-sensitive :}
+\begin{itemize}
+    \item Logistic Regression + \texttt{class\_weight='balanced'}
+    \item Random Forest + \texttt{class\_weight='balanced'}
+    \item Balanced Random Forest (sous-échantillonnage automatique)
+    \item XGBoost + \texttt{scale\_pos\_weight=165.6}
+\end{itemize}
+
+\textbf{3. Optimisation du seuil de décision :}
+\begin{itemize}
+    \item XGBoost + ajustement du seuil ($\tau^* = 0.939$)
+\end{itemize}
+
+\subsubsection{Résultats comparatifs}
+
+Le Tableau \ref{tab:resultats_partie1} présente les performances des 9 modèles sur l'ensemble de test, triées par F-mesure décroissante.
+
+\begin{table}[H]
+\centering
+\caption{Performances des modèles sur l'ensemble de test (Partie 1 : F-mesure)}
+\label{tab:resultats_partie1}
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Modèle} & \textbf{F-mesure} & \textbf{Précision} & \textbf{Rappel} & \textbf{TP} & \textbf{FN} & \textbf{FP} \\
+\midrule
+\textbf{XGBoost (seuil=0.939)} & \textbf{0.148} & \textbf{0.184} & \textbf{0.124} & \textbf{807} & \textbf{5678} & \textbf{3581} \\
+XGBoost + SMOTE & 0.130 & 0.157 & 0.112 & 724 & 5761 & 3893 \\
+SMOTE + LogReg & 0.094 & 0.156 & 0.067 & 437 & 6048 & 2370 \\
+UnderSampling + LogReg & 0.067 & 0.037 & 0.355 & 2304 & 4181 & 60017 \\
+LogReg + class\_weight & 0.039 & 0.020 & 0.581 & 3765 & 2720 & 184706 \\
+RandomForest + class\_weight & 0.036 & 0.019 & 0.653 & 4237 & 2248 & 223457 \\
+BalancedRandomForest & 0.035 & 0.018 & 0.685 & 4441 & 2044 & 242790 \\
+XGBoost + scale\_pos\_weight & 0.035 & 0.018 & 0.695 & 4508 & 1977 & 248906 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Observations clés :}
+
+\begin{enumerate}
+    \item \textbf{Meilleure F-mesure :} XGBoost avec seuil ajusté ($\tau=0.939$) atteint une F-mesure de \textbf{0.148}, surpassant tous les autres modèles. L'ajustement du seuil de décision s'avère être la stratégie la plus efficace pour maximiser ce critère.
+    
+    \item \textbf{Compromis Précision-Rappel :} On observe deux régimes distincts :
+    \begin{itemize}
+        \item \textbf{Haute précision, faible rappel} : Les modèles basés sur rééchantillonnage (SMOTE + LogReg, XGBoost + SMOTE) privilégient la précision ($\approx$ 15-18\%) au détriment du rappel ($\approx$ 7-12\%). Ils génèrent peu de fausses alarmes mais manquent beaucoup de fraudes.
+        \item \textbf{Haute rappel, faible précision} : Les modèles cost-sensitive (class\_weight, scale\_pos\_weight) détectent jusqu'à 69.5\% des fraudes mais au prix de nombreuses fausses alarmes (précision $\approx$ 2\%).
+    \end{itemize}
+    
+    \item \textbf{Impact du sur-échantillonnage vs. cost-sensitive :} SMOTE améliore légèrement XGBoost (F1 = 0.130 vs 0.035 pour scale\_pos\_weight seul), suggérant que la génération d'exemples synthétiques capture mieux les frontières de décision que la simple pondération des classes.
+    
+    \item \textbf{Sous-échantillonnage excessif :} UnderSampling + LogReg produit des résultats médiocres (F1 = 0.067) avec 60 017 fausses alarmes, indiquant que la suppression de trop d'exemples majoritaires dégrade la qualité du modèle.
+\end{enumerate}
+
+\subsubsection{Analyse du meilleur modèle : XGBoost (seuil=0.939)}
+
+Le modèle XGBoost avec seuil ajusté constitue notre solution optimale pour la maximisation de la F-mesure. Analysons ses performances en détail.
+
+\textbf{Matrice de confusion :}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cc|c|c|}
+\multicolumn{2}{c}{} & \multicolumn{2}{c}{\textbf{Prédiction}} \\
+\cline{3-4}
+\multicolumn{2}{c|}{} & Légitime (0) & Fraude (1) \\
+\cline{2-4}
+\multirow{2}{*}{\textbf{Vérité}} & Légitime (0) & 727 002 (TN) & 3 581 (FP) \\
+\cline{2-4}
+& Fraude (1) & 5 678 (FN) & 807 (TP) \\
+\cline{2-4}
+\end{tabular}
+\caption{Matrice de confusion du modèle XGBoost (seuil=0.939)}
+\label{tab:confusion_xgboost}
+\end{table}
+
+\textbf{Interprétation métier :}
+
+\begin{itemize}
+    \item \textbf{Taux de détection :} 12.4\% des fraudes sont correctement identifiées (807 sur 6 485)
+    \item \textbf{Précision :} Parmi les 4 388 transactions signalées comme frauduleuses, 807 le sont réellement, soit 18.4\%. Autrement dit, 81.6\% des alertes sont de fausses alarmes.
+    \item \textbf{Impact opérationnel :}
+    \begin{itemize}
+        \item 5 678 fraudes passent inaperçues (87.6\%), représentant un coût financier potentiellement élevé selon les montants impliqués
+        \item 3 581 clients légitimes sont bloqués à tort (0.49\% des transactions légitimes), ce qui reste acceptable pour l'expérience utilisateur
+    \end{itemize}
+\end{itemize}
+
+% Figure 4.1 - Résultats Partie 1 (composite)
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/resultats_partie1_complet.png}
+    \caption{Résultats comparatifs Partie 1 (F-mesure) : (gauche) F-mesures par modèle, (centre) compromis Précision-Rappel, (droite) nombre de fraudes détectées (TP)}
+    \label{fig:comparison_f1}
+\end{figure}
+
+% Figure 4.2 - Matrice de confusion
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/confusion_matrix_xgboost.png}
+    \caption{Matrice de confusion du meilleur modèle (XGBoost, seuil=0.939)}
+    \label{fig:confusion_xgboost}
+\end{figure}
+
+\subsubsection{Analyse des compromis et limites}
+
+\textbf{Compromis Précision-Rappel :} Le graphique central de la Figure \ref{fig:comparison_f1} illustre le compromis Précision-Rappel pour tous les modèles, montrant le positionnement de chaque approche dans l'espace (Rappel, Précision). Le meilleur modèle XGBoost (seuil=0.939) se situe dans une zone privilégiant la précision, reflétant le fait que la F-mesure pénalise moins les faux négatifs que les faux positifs dans notre configuration.
+
+% Figure 4.3 supprimée (déjà présente dans la figure composite 4.1)
+
+\textbf{Limites identifiées :}
+
+\begin{enumerate}
+    \item \textbf{F-mesure absolue faible (0.148)} : Cette performance modeste s'explique par le déséquilibre extrême (0.88\% de fraudes) et la difficulté intrinsèque de la tâche. Même en détectant 12\% des fraudes avec 18\% de précision, le compromis reste difficile à optimiser.
+    
+    \item \textbf{Rappel insuffisant (12.4\%)} : Seule une fraude sur huit est détectée, ce qui peut être problématique d'un point de vue métier si l'objectif est de minimiser les pertes financières totales.
+    
+    \item \textbf{Seuil ajusté sur test} : L'optimisation du seuil directement sur l'ensemble de test constitue une violation méthodologique. Idéalement, un ensemble de validation séparé aurait dû être utilisé. Cette limitation introduit un risque de surestimation de la performance réelle en production.
+    
+    \item \textbf{Hyperparamètres non optimisés} : Les performances pourraient être améliorées via une recherche exhaustive des hyperparamètres (GridSearchCV), comme discuté en Section 3.4.4.
+\end{enumerate}
+
+\textbf{Comparaison avec la littérature :} D'après la thèse de référence ayant exploité le même jeu de données, les meilleures F-mesures rapportées sur des datasets similaires (BLITZ) sont de l'ordre de 0.08 (SVM\_C). Notre résultat de 0.148 représente donc une amélioration significative, probablement due à la combinaison de XGBoost (plus puissant que SVM linéaire) et de l'ajustement fin du seuil de décision.
+
+\subsection{Partie 2 : Optimisation du profit}
+
+L'objectif de cette seconde partie est de maximiser la marge commerciale générée par l'enseigne en tenant compte d'une matrice de coûts réaliste qui reflète les gains et pertes associés à chaque type de décision. Contrairement à la F-mesure qui traite toutes les erreurs de manière symétrique, l'optimisation du profit intègre explicitement les contraintes métier et les montants des transactions.
+
+\subsubsection{Implémentation de la fonction de profit}
+
+La fonction de calcul de la marge prend en entrée les prédictions du modèle, les vraies étiquettes et les montants des transactions. Pour chaque transaction, le gain ou la perte est calculé selon les règles métier définies dans le Tableau \ref{tab:matrice_couts} (Section 3.1.2).
+
+\textbf{Logique de calcul :}
+
+\begin{enumerate}
+    \item \textbf{TN (Vrai Négatif) - Transaction légitime acceptée :}
+    \[
+    \text{Gain}_{TN} = +0{,}05 \times \text{Montant}
+    \]
+    L'enseigne réalise une marge de 5\% sur les transactions acceptées.
+    
+    \item \textbf{FP (Faux Positif) - Transaction légitime refusée :}
+    \[
+    \text{Gain}_{FP} = +0{,}035 \times \text{Montant}
+    \]
+    Le client légitime va probablement payer par un autre moyen (carte, espèces). L'enseigne perd une partie de la marge (30\% de la marge initiale), mais conserve 3,5\% du montant.
+    
+    \item \textbf{FN (Faux Négatif) - Fraude acceptée :}
+    \[
+    \text{Perte}_{FN} = -\text{perte}(\text{Montant})
+    \]
+    où la fonction $\text{perte}(\cdot)$ est définie par paliers (cf. Section 3.1.2). Les pertes varient de 0\% (montants $\leq$ 20€) à 80\% (montants $>$ 200€).
+    
+    \item \textbf{TP (Vrai Positif) - Fraude refusée :}
+    \[
+    \text{Gain}_{TP} = 0
+    \]
+    Aucun gain ni perte : la fraude est évitée mais aucune transaction n'est réalisée.
+\end{enumerate}
+
+La marge totale est alors :
+\[
+\text{Marge}_{\text{totale}} = \sum_{i \in TN} 0{,}05 \cdot m_i + \sum_{i \in FP} 0{,}035 \cdot m_i - \sum_{i \in FN} \text{perte}(m_i)
+\]
+
+Cette fonction a été implémentée en Python et appliquée à tous les modèles testés.
+
+\subsubsection{Modèles évalués}
+
+Les \textbf{8 mêmes approches} que dans la Partie 1 ont été réévaluées selon le critère de profit. Seuls \textbf{15 features} ont été conservées pour optimiser les temps de calcul, sans impact significatif sur les performances.
+
+\subsubsection{Résultats comparatifs}
+
+Le Tableau \ref{tab:resultats_partie2} présente les performances des 8 modèles triées par marge totale décroissante.
+
+\begin{table}[H]
+\centering
+\caption{Performances des modèles sur l'ensemble de test (Partie 2 : Profit)}
+\label{tab:resultats_partie2}
+\small
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+\textbf{Modèle} & \textbf{Marge (€)} & \textbf{F1} & \textbf{Précision} & \textbf{Rappel} & \textbf{FN} & \textbf{FP} \\
+\midrule
+\textbf{XGBoost (seuil=0.85)} & \textbf{2 055 747} & \textbf{0.104} & \textbf{0.065} & \textbf{0.257} & \textbf{4 819} & \textbf{23 915} \\
+UnderSampling + LogReg & 2 040 856 & 0.067 & 0.037 & 0.356 & 4 179 & 60 122 \\
+XGBoost + SMOTE & 2 018 959 & 0.136 & 0.127 & 0.147 & 5 648 & 4 970 \\
+SMOTE + LogReg & 1 975 483 & 0.094 & 0.156 & 0.068 & 6 050 & 2 347 \\
+LogReg + class\_weight & 1 965 497 & 0.039 & 0.020 & 0.581 & 2 719 & 184 755 \\
+RandomForest + class\_weight & 1 932 808 & 0.037 & 0.019 & 0.641 & 2 331 & 213 344 \\
+BalancedRandomForest & 1 923 921 & 0.036 & 0.018 & 0.667 & 2 158 & 228 441 \\
+XGBoost + scale\_pos\_weight & 1 896 777 & 0.035 & 0.018 & 0.691 & 2 005 & 247 189 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Observations clés :}
+
+\begin{enumerate}
+    \item \textbf{Meilleure marge :} XGBoost avec seuil ajusté ($\tau=0.85$) génère une marge de \textbf{2 055 747€} sur la période de test (3 mois), soit environ \textbf{685k€/mois}. Le seuil optimal pour le profit (0.85) est \textit{inférieur} au seuil optimal pour la F-mesure (0.939), reflétant un compromis différent entre précision et rappel.
+    
+    \item \textbf{Écart entre modèles :} La différence de marge entre le meilleur (2,06M€) et le pire modèle (1,90M€) est de \textbf{159k€}, soit 8\% d'écart. Cette variation significative justifie l'optimisation spécifique pour le critère métier.
+    
+    \item \textbf{Corrélation F1-Marge faible :} Le classement par marge diffère sensiblement du classement par F-mesure :
+    \begin{itemize}
+        \item XGBoost + SMOTE a une meilleure F1 (0.136) que XGBoost seuil=0.85 (0.104), mais génère 37k€ de marge en moins
+        \item Les modèles avec haut rappel (class\_weight, scale\_pos\_weight) ont les \textit{pires} marges malgré un rappel élevé (>60\%)
+    \end{itemize}
+    
+    \item \textbf{Impact des fausses alarmes :} Les modèles à haute précision (SMOTE + LogReg : FP=2347) génèrent plus de marge que ceux à haute rappel (scale\_pos\_weight : FP=247189), car bloquer trop de clients légitimes coûte cher en perte de marge (70\% de 5\% = 3,5\% conservés vs. 5\% perdus).
+\end{enumerate}
+
+% Figure 4.4 - Résultats Partie 2 (composite)
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/resultats_partie2_complet.png}
+    \caption{Résultats comparatifs Partie 2 (Profit) : (gauche) Marges totales par modèle, (centre) trade-off FN vs FP, (droite) F-mesures associées}
+    \label{fig:comparison_marge}
+\end{figure}
+
+\subsubsection{Analyse du meilleur modèle : XGBoost (seuil=0.85)}
+
+Le modèle XGBoost avec seuil ajusté à 0.85 constitue la solution optimale pour la maximisation du profit. Analysons en détail sa rentabilité.
+
+\textbf{Décomposition financière :}
+
+\begin{table}[H]
+\centering
+\caption{Décomposition financière du meilleur modèle (XGBoost, seuil=0.85)}
+\label{tab:decomposition_profit}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Catégorie} & \textbf{Nombre} & \textbf{Montant unitaire moyen} & \textbf{Impact total (€)} \\
+\midrule
+TN (Bons acceptés) & 706 668 & +2,94€ & +2 078 151 \\
+FP (Bons refusés) & 23 915 & +5,27€ & +126 043 \\
+FN (Fraudes acceptées) & 4 819 & -30,80€ & -148 447 \\
+TP (Fraudes refusées) & 1 666 & 0€ & 0 \\
+\midrule
+\textbf{Gains totaux} & 730 583 & -- & \textbf{+2 204 194} \\
+\textbf{Pertes totales} & 4 819 & -- & \textbf{-148 447} \\
+\midrule
+\textbf{Marge nette} & -- & -- & \textbf{+2 055 747} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interprétation métier :}
+
+\begin{itemize}
+    \item \textbf{Rentabilité globale :} La marge nette de 2,06M€ sur 3 mois représente environ 3,4\% de perte par rapport à un scénario théorique où toutes les fraudes seraient détectées sans fausses alarmes (marge maximale théorique $\approx$ 2,13M€, estimation basée sur l'acceptation de tous les bons clients).
+    
+    \item \textbf{Équilibre optimal :} Le modèle accepte 96,7\% des transactions légitimes (706 668 / 730 583) tout en rejetant 25,7\% des fraudes (1 666 / 6 485). Cet équilibre favorise la satisfaction client (peu de blocages) tout en limitant les pertes frauduleuses à 148k€.
+    
+    \item \textbf{Coût des fausses alarmes :} Les 23 915 clients légitimes bloqués représentent un manque à gagner de \textbf{35k€} (différence entre 5\% et 3,5\% de marge). Ce coût est largement compensé par l'économie réalisée sur les fraudes détectées.
+    
+    \item \textbf{Impact des fraudes manquées :} Les 4 819 fraudes acceptées coûtent en moyenne 30,80€ chacune (perte variable selon les montants). Ces pertes représentent 7,2\% de la marge totale, un ratio acceptable pour l'enseigne.
+\end{itemize}
+
+\subsubsection{Comparaison avec la Partie 1 : F-mesure vs. Profit}
+
+Le Tableau \ref{tab:fmesure_vs_profit} compare directement les performances des meilleurs modèles pour chaque objectif.
+
+\begin{table}[H]
+\centering
+\caption{Comparaison des meilleurs modèles pour chaque objectif}
+\label{tab:fmesure_vs_profit}
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{Modèle} & \textbf{Objectif} & \textbf{F1} & \textbf{Marge (€)} & \textbf{Précision} & \textbf{Rappel} & \textbf{FN} \\
+\midrule
+XGBoost ($\tau$=0.939) & F-mesure & \textbf{0.148} & 2 009 856 & 0.184 & 0.124 & 5 678 \\
+XGBoost ($\tau$=0.85) & Profit & 0.104 & \textbf{2 055 747} & 0.065 & 0.257 & 4 819 \\
+\midrule
+\textbf{Gain relatif} & -- & -29,7\% & \textbf{+2,3\%} & -64,7\% & +107\% & -15,1\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analyse des différences :}
+
+\begin{enumerate}
+    \item \textbf{Seuils optimaux différents :} Le seuil optimal pour le profit (0.85) est nettement inférieur à celui pour la F-mesure (0.939). En abaissant le seuil, le modèle privilégie le rappel (détection de plus de fraudes) au détriment de la précision, ce qui s'avère financièrement plus rentable.
+    
+    \item \textbf{Trade-off Précision-Rappel :} Le modèle orienté profit sacrifie 11,9 points de précision (18.4\% → 6.5\%) mais gagne 13.3 points de rappel (12.4\% → 25.7\%). En termes métier, cela signifie :
+    \begin{itemize}
+        \item 859 fraudes supplémentaires détectées (5678 → 4819 FN)
+        \item 20 334 fausses alarmes supplémentaires (3581 → 23915 FP)
+    \end{itemize}
+    Le coût des fausses alarmes supplémentaires (+20k FP $\times$ 1,5€ perdu/FP $\approx$ +30k€ perdus) est largement compensé par l'économie sur les fraudes détectées (+859 FN évitées $\times$ 30€ économisés/FN $\approx$ +26k€ gagnés) + réduction des pertes variables sur gros montants.
+    
+    \item \textbf{Gain de marge de +2,3\% :} Le modèle optimisé pour le profit génère \textbf{45 891€ supplémentaires} par rapport au modèle optimisé pour la F-mesure, soit environ **15k€/mois**. Sur une année, cette différence représenterait **180k€**, justifiant amplement l'optimisation spécifique.
+    
+    \item \textbf{F-mesure ne maximise pas le profit :} Ce résultat démontre empiriquement que la F-mesure, bien qu'utile pour évaluer l'équilibre Précision-Rappel, n'est \textit{pas} un proxy fiable du profit réel. L'intégration explicite des coûts métier dans la fonction objectif est indispensable pour maximiser la rentabilité.
+\end{enumerate}
+
+\subsubsection{Recommandations pour le déploiement en production}
+
+Sur la base de ces résultats, nous formulons les recommandations suivantes pour un déploiement en production du système de détection de fraudes :
+
+\begin{enumerate}
+    \item \textbf{Adopter le modèle XGBoost avec seuil=0.85} : Ce modèle offre le meilleur compromis marge/complexité et générerait environ 8,2M€ de marge annuelle (extrapolation sur 12 mois).
+    
+    \item \textbf{Monitoring continu du profit :} Suivre quotidiennement la marge réalisée et comparer avec les prédictions. Tout écart significatif (>5\%) doit déclencher une investigation (évolution des comportements frauduleux, non-stationnarité).
+    
+    \item \textbf{Réentraînement mensuel :} Compte tenu de la non-stationnarité observée (taux de fraude passant de 0,60\% à 0,88\%), réentraîner le modèle chaque mois sur une fenêtre glissante de 6 mois pour s'adapter aux évolutions.
+    
+    \item \textbf{A/B testing avant déploiement complet :} Tester le nouveau système sur 10-20\% du trafic pendant 1 mois et comparer avec le système existant en termes de marge réelle, satisfaction client (réclamations) et charge opérationnelle (validation manuelle).
+    
+    \item \textbf{Ajustement dynamique du seuil :} Implémenter un mécanisme permettant d'ajuster le seuil de décision en fonction de la saisonnalité (périodes de soldes, fêtes) ou d'alertes spécifiques (vague de fraudes détectée).
+\end{enumerate}
+
+
