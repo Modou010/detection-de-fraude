@@ -1,0 +1,35 @@
+================================================================================
+RÉSUMÉ - MODÉLISATION PARTIE 1: MAXIMISATION F-MESURE
+================================================================================
+
+DATASET:
+  Train: 3,888,468 transactions (23,346 fraudes - 0.60%)
+  Test:  737,068 transactions (6,485 fraudes - 0.88%)
+  Features utilisées: 16
+  Ratio de déséquilibre: 1:165.6
+
+RÉSULTATS PAR MODÈLE (triés par F-mesure):
+--------------------------------------------------------------------------------
+                      model       f1  precision   recall   tp   fn     fp
+      XGBoost (seuil=0.939) 0.148441   0.183911 0.124441  807 5678   3581
+            XGBoost + SMOTE 0.130427   0.156812 0.111642  724 5761   3893
+             SMOTE + LogReg 0.094059   0.155682 0.067386  437 6048   2370
+     UnderSampling + LogReg 0.066971   0.036970 0.355281 2304 4181  60017
+      LogReg + class_weight 0.038624   0.019977 0.580571 3765 2720 184706
+RandomForest + class_weight 0.036186   0.018608 0.653354 4237 2248 223457
+       BalancedRandomForest 0.035008   0.017963 0.684811 4441 2044 242790
+ XGBoost + scale_pos_weight 0.034690   0.017789 0.695143 4508 1977 248906
+ XGBoost + scale_pos_weight 0.034690   0.017789 0.695143 4508 1977 248906
+
+================================================================================
+🏆 MEILLEUR MODÈLE: XGBoost (seuil=0.939)
+================================================================================
+  F-mesure:  0.1484
+  Précision: 0.1839
+  Rappel:    0.1244
+
+DÉTAILS DE LA MATRICE DE CONFUSION:
+  TP (fraudes correctement détectées): 807
+  TN (transactions normales correctes): 727,002
+  FN (fraudes manquées):               5,678
+  FP (fausses alarmes):                3,581
